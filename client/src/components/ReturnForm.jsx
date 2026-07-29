@@ -50,6 +50,15 @@ export default function ReturnForm({ asset, activeTx, onSubmit }) {
     }
   }
 
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
 
@@ -60,14 +69,15 @@ export default function ReturnForm({ asset, activeTx, onSubmit }) {
 
     setLoading(true); setError(null)
     try {
-      const fd = new FormData()
-      fd.append('asset_code', asset.asset_code)
-      fd.append('return_by_name', form.return_by_name)
-      if (form.return_note) fd.append('return_note', form.return_note)
-      if (form.odometer_end) fd.append('odometer_end', form.odometer_end)
-      if (photo) fd.append('return_photo', photo)
+      const payload = {
+        asset_code: asset.asset_code,
+        return_by_name: form.return_by_name,
+        return_note: form.return_note || null,
+        odometer_end: form.odometer_end ? Number(form.odometer_end) : null,
+        return_photo: photo ? await toBase64(photo) : null,
+      }
 
-      await onSubmit(fd)
+      await onSubmit(payload)
     } catch (e) {
       setError(e.message || 'Terjadi kesalahan')
       setLoading(false)

@@ -85,17 +85,18 @@ export default function ScanPage() {
     })
   }
 
-  async function handleReturn(formData) {
+  async function handleReturn(payload) {
     const res = await fetch(`${API}/public/return`, {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error || 'Gagal mengembalikan')
     navigate('/scan/success', {
       state: {
         type: 'return',
-        borrower_name: formData.get('return_by_name'),
+        borrower_name: payload.return_by_name,
         asset,
         transaction: json.data,
       },

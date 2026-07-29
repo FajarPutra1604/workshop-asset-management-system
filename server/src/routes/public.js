@@ -1,14 +1,8 @@
 import { Router } from 'express'
 import { body, param, validationResult } from 'express-validator'
 import pool from '../db/pool.js'
-import { upload } from '../middleware/upload.js'
 
 const router = Router()
-
-function fileToBase64(file) {
-  if (!file) return null
-  return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`
-}
 
 // ─── GET /api/public/assets/:assetCode ────────────────────────────────────
 // Informasi aset + status untuk halaman scan (no auth, rate-limited dari index.js)
@@ -151,20 +145,20 @@ router.post(
 // ─── POST /api/public/return ───────────────────────────────────────────────
 router.post(
   '/return',
-  upload.single('return_photo'),
   [
     body('asset_code').trim().notEmpty().withMessage('asset_code wajib diisi'),
     body('return_by_name').trim().notEmpty().withMessage('Nama wajib diisi'),
     body('return_note').optional().trim(),
     body('odometer_end').optional().isInt({ min: 0 }).toInt(),
+    body('return_photo').optional().isString(),
   ],
   async (req, res, next) => {
     try {
       const errors = validationResult(req)
       if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg })
 
-      const { asset_code, return_by_name, return_note, odometer_end } = req.body
-      const return_photo_url = fileToBase64(req.file)
+      const { asset_code, return_by_name, return_note, odometer_end, return_photo } = req.body
+      const return_photo_url = return_photo || null
 
       const client = await pool.connect()
       try {
