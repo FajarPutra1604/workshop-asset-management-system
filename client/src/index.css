@@ -1,0 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: 99 102 241;   /* indigo-500 */
+    --color-success: 34 197 94;    /* emerald-500 */
+    --color-warning: 245 158 11;   /* amber-500 */
+    --color-danger: 244 63 94;     /* rose-500 */
+    --color-info: 59 130 246;      /* blue-500 */
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased font-sans selection:bg-indigo-500/15 selection:text-indigo-700;
+  }
+
+  * {
+    @apply border-slate-200/80;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-semibold text-slate-900;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors; }
+}
+
+@layer components {
+  /* ── Buttons ─────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl
+           font-medium text-sm transition-all duration-150 tracking-tight
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-indigo-500/30
+           disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply btn bg-indigo-600 text-white hover:bg-indigo-500 active:bg-indigo-700
+           shadow-sm border border-indigo-600/50;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 border border-slate-200
+           hover:bg-slate-50 hover:text-slate-900 shadow-subtle;
+  }
+  .btn-danger {
+    @apply btn bg-rose-600 text-white hover:bg-rose-500 active:bg-rose-700
+           shadow-sm border border-rose-600/50;
+  }
+  .btn-ghost {
+    @apply btn text-slate-600 hover:bg-slate-100/80 hover:text-slate-900;
+  }
+  .btn-success {
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-500 active:bg-emerald-700
+           shadow-sm border border-emerald-600/50;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs rounded-lg;
+  }
+  .btn-lg {
+    @apply px-5 py-2.5 text-base rounded-xl;
+  }
+  .btn-icon {
+    @apply btn p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100;
+  }
+
+  /* ── Inputs ──────────────────────────────────────────── */
+  .input {
+    @apply w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm
+           bg-white text-slate-800 placeholder:text-slate-400 shadow-subtle
+           focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10
+           transition-all duration-150;
+  }
+  .input-error {
+    @apply border-rose-400 focus:border-rose-500 focus:ring-rose-500/10;
+  }
+  .label {
+    @apply block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5;
+  }
+  .label-required::after {
+    content: ' *';
+    @apply text-rose-500 font-bold;
+  }
+  .field-error {
+    @apply text-xs text-rose-500 mt-1.5 font-medium flex items-center gap-1;
+  }
+
+  /* ── Cards ───────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-200/80 shadow-card transition-all duration-150;
+  }
+  .card-header {
+    @apply px-6 py-4 border-b border-slate-100/80 flex items-center justify-between;
+  }
+  .card-body {
+    @apply p-6;
+  }
+
+  /* ── Badge / Status ──────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-transparent;
+  }
+  .badge-available {
+    @apply badge bg-emerald-500/10 text-emerald-700 border-emerald-500/20;
+  }
+  .badge-borrowed {
+    @apply badge bg-blue-500/10 text-blue-700 border-blue-500/20;
+  }
+  .badge-overdue {
+    @apply badge bg-rose-500/10 text-rose-700 border-rose-500/20;
+  }
+  .badge-maintenance {
+    @apply badge bg-amber-500/10 text-amber-700 border-amber-500/20;
+  }
+  .badge-lost {
+    @apply badge bg-slate-500/10 text-slate-600 border-slate-500/20;
+  }
+
+  /* ── Category Badge ──────────────────────────────────── */
+  .badge-tool {
+    @apply badge bg-purple-500/10 text-purple-700 border-purple-500/20;
+  }
+  .badge-vehicle {
+    @apply badge bg-sky-500/10 text-sky-700 border-sky-500/20;
+  }
+  .badge-room {
+    @apply badge bg-teal-500/10 text-teal-700 border-teal-500/20;
+  }
+
+  /* ── Table ───────────────────────────────────────────── */
+  .table-wrapper {
+    @apply w-full overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-card;
+  }
+  .table {
+    @apply w-full text-sm text-left border-collapse;
+  }
+  .table th {
+    @apply px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider
+           bg-slate-50/50 border-b border-slate-100;
+  }
+  .table td {
+    @apply px-4 py-3.5 text-slate-700 border-b border-slate-100/70 align-middle text-sm;
+  }
+  .table tr:last-child td {
+    @apply border-b-0;
+  }
+  .table tbody tr {
+    @apply hover:bg-slate-50/70 transition-colors duration-100;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
+           text-slate-600 hover:text-slate-900 hover:bg-slate-100/80
+           transition-all duration-150;
+  }
+  .sidebar-link.active {
+    @apply bg-indigo-50 text-indigo-700 font-semibold shadow-subtle border border-indigo-100/60;
+  }
+
+  /* ── Stat Card ───────────────────────────────────────── */
+  .stat-card {
+    @apply card p-5 flex flex-col justify-between hover:border-slate-300/80 transition-all;
+  }
+
+  /* ── Animations ──────────────────────────────────────── */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .animate-fade-in { animation: fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .animate-slide-in { animation: slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .animate-scale-in { animation: scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
