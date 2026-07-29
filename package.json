@@ -2,6 +2,7 @@
   "name": "workshop-asset-management-system",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Workshop Asset Borrowing Tracker (WABT) - sistem tracking peminjaman aset berbasis QR Code",
   "scripts": {
     "dev:client": "npm --prefix client run dev",
