@@ -2,8 +2,6 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import authRouter from './routes/auth.js'
 import assetsRouter from './routes/assets.js'
@@ -16,9 +14,6 @@ import auditLogsRouter from './routes/audit-logs.js'
 import { publicRateLimiter } from './middleware/rateLimit.js'
 import { errorHandler } from './middleware/errorHandler.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 const app = express()
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
 
@@ -26,8 +21,6 @@ app.use(cors({ origin: CORS_ORIGIN.split(',').map((s) => s.trim()), credentials:
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan('dev'))
-
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

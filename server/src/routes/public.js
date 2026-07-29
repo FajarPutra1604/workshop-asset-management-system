@@ -5,13 +5,9 @@ import { upload } from '../middleware/upload.js'
 
 const router = Router()
 
-// ─── Helper ────────────────────────────────────────────────────────────────
-
-function buildPhotoUrl(req, filename) {
-  if (!filename) return null
-  const proto = req.headers['x-forwarded-proto'] || req.protocol
-  const host = req.headers['x-forwarded-host'] || req.get('host')
-  return `${proto}://${host}/uploads/${filename}`
+function fileToBase64(file) {
+  if (!file) return null
+  return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`
 }
 
 // ─── GET /api/public/assets/:assetCode ────────────────────────────────────
@@ -168,7 +164,7 @@ router.post(
       if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg })
 
       const { asset_code, return_by_name, return_note, odometer_end } = req.body
-      const return_photo_url = req.file ? buildPhotoUrl(req, req.file.filename) : null
+      const return_photo_url = fileToBase64(req.file)
 
       const client = await pool.connect()
       try {

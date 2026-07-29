@@ -9,16 +9,12 @@ import { validateCategory, validateAssetStatus, validateQueryCategory, validateQ
 
 const router = Router()
 
-// Semua routes dilindungi auth
 router.use(requireAuth)
 
-// ─── Helper ────────────────────────────────────────────────────────────────
-
-function buildPhotoUrl(req, filename) {
-  if (!filename) return null
-  const proto = req.headers['x-forwarded-proto'] || req.protocol
-  const host = req.headers['x-forwarded-host'] || req.get('host')
-  return `${proto}://${host}/uploads/${filename}`
+function fileToBase64(file) {
+  if (!file) return null
+  const mime = file.mimetype
+  return `data:${mime};base64,${file.buffer.toString('base64')}`
 }
 
 // ─── GET /api/assets ────────────────────────────────────────────────────────
@@ -164,7 +160,7 @@ router.post(
       } = req.body
 
       const asset_code = generateAssetCode()
-      const photo_url = req.file ? buildPhotoUrl(req, req.file.filename) : null
+      const photo_url = fileToBase64(req.file)
 
       const client = await pool.connect()
       try {
@@ -237,7 +233,7 @@ router.put(
       if (existing.length === 0) return res.status(404).json({ error: 'Aset tidak ditemukan' })
 
       const asset = existing[0]
-      const photo_url = req.file ? buildPhotoUrl(req, req.file.filename) : asset.photo_url
+      const photo_url = req.file ? fileToBase64(req.file) : asset.photo_url
 
       const client = await pool.connect()
       try {
