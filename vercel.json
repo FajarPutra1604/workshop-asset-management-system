@@ -1,6 +1,5 @@
 {
-  "installCommand": "npm install --prefix client && npm install --prefix server",
-  "buildCommand": "npm --prefix client run build",
+  "buildCommand": "npm run build --workspace=client",
   "outputDirectory": "client/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }

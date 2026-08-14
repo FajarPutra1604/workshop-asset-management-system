@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "description": "Workshop Asset Borrowing Tracker (WABT) - sistem tracking peminjaman aset berbasis QR Code",
   "scripts": {
     "dev:client": "npm --prefix client run dev",
