@@ -8,7 +8,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  History
 } from 'lucide-react'
 
 const TOKEN_KEY = 'wabt_token'
@@ -111,6 +112,7 @@ export default function AdminLayout({ children }) {
                 <NavItem to="/admin/assets" icon={Wrench} label="Aset" onClick={() => setMobileOpen(false)} />
                 <NavItem to="/admin/transactions" icon={ClipboardList} label="Transaksi" onClick={() => setMobileOpen(false)} />
                 {canManageAdmins && <NavItem to="/admin/admin-users" icon={Users} label="Admin Users" onClick={() => setMobileOpen(false)} />}
+                {isSuperAdmin && <NavItem to="/admin/audit-logs" icon={History} label="Audit Logs" onClick={() => setMobileOpen(false)} />}
                 {isSuperAdmin && <NavItem to="/admin/settings" icon={Settings} label="Pengaturan" onClick={() => setMobileOpen(false)} />}
               </nav>
             </div>
@@ -165,6 +167,7 @@ export default function AdminLayout({ children }) {
             <NavItem to="/admin/assets" icon={Wrench} label="Aset" />
             <NavItem to="/admin/transactions" icon={ClipboardList} label="Transaksi" />
             {canManageAdmins && <NavItem to="/admin/admin-users" icon={Users} label="Admin Users" />}
+            {isSuperAdmin && <NavItem to="/admin/audit-logs" icon={History} label="Audit Logs" />}
             {isSuperAdmin && <NavItem to="/admin/settings" icon={Settings} label="Pengaturan" />}
           </nav>
         </div>

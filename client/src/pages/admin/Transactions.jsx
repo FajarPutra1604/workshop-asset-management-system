@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search, RotateCcw, Camera, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, RotateCcw, Camera, ClipboardList, ChevronLeft, ChevronRight, Download, Undo2, Trash2 } from 'lucide-react'
 import AdminLayout from '../../components/AdminLayout'
 import { Badge } from '../../components/ui/Badge'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
 import client from '../../api/client'
+
+const ADMIN_KEY = 'wabt_admin'
+
+function getRole() {
+  try { return JSON.parse(localStorage.getItem(ADMIN_KEY) || 'null')?.role || 'viewer' } catch { return 'viewer' }
+}
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Semua Status' },
@@ -38,12 +45,24 @@ function durationStr(borrowedAt, returnedAt, expectedAt) {
   )
 }
 
+function lateReturnText(tx) {
+  if (!tx.is_late_return) return null
+  const ms = new Date(tx.returned_at) - new Date(tx.expected_return_at)
+  const days = Math.floor(ms / 86400000)
+  return days > 0 ? `Telat ${days} hari` : 'Telat'
+}
+
 export default function Transactions() {
   const [transactions, setTransactions] = useState([])
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 })
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ status: '', category: '', search: '', from: '', to: '' })
   const [page, setPage] = useState(1)
+  const [viewPhoto, setViewPhoto] = useState(null) // transaction object untuk lihat foto
+  const [role] = useState(getRole)
+  const canManage = role === 'admin' || role === 'superadmin'
+  const [actionTx, setActionTx] = useState(null) // { tx, type: 'return' | 'delete' }
+  const [actionLoading, setActionLoading] = useState(false)
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -63,6 +82,32 @@ export default function Transactions() {
   useEffect(() => { fetchTransactions() }, [fetchTransactions])
 
   const setFilter = (k, v) => { setFilters(f => ({ ...f, [k]: v })); setPage(1) }
+
+  async function handleForceReturn() {
+    setActionLoading(true)
+    try {
+      await client.put(`/transactions/${actionTx.tx.id}/return`)
+      setActionTx(null)
+      fetchTransactions()
+    } catch (e) {
+      alert(e.response?.data?.error || 'Gagal menandai dikembalikan')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleDeleteTx() {
+    setActionLoading(true)
+    try {
+      await client.delete(`/transactions/${actionTx.tx.id}`)
+      setActionTx(null)
+      fetchTransactions()
+    } catch (e) {
+      alert(e.response?.data?.error || 'Gagal menghapus transaksi')
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
   return (
     <AdminLayout>
@@ -138,6 +183,7 @@ export default function Transactions() {
                       <th>Durasi</th>
                       <th>Status</th>
                       <th>Foto</th>
+                      {canManage && <th className="text-right">Aksi</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -168,17 +214,44 @@ export default function Transactions() {
                           <td className="text-xs text-slate-700 font-medium">{fmt(tx.returned_at)}</td>
                           <td className="text-xs">{durationStr(tx.borrowed_at, tx.returned_at, tx.expected_return_at)}</td>
                           <td>
-                            <Badge status={isOverdue ? 'overdue' : tx.status} />
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Badge status={isOverdue ? 'overdue' : tx.status} />
+                              {lateReturnText(tx) && (
+                                <span className="badge bg-rose-50 text-rose-600 border-rose-200/80">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0" />
+                                  {lateReturnText(tx)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             {tx.return_photo_url ? (
-                              <a href={tx.return_photo_url} target="_blank" rel="noreferrer"
+                              <button onClick={() => setViewPhoto(tx)}
                                 className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
                                 <Camera className="w-3.5 h-3.5" />
                                 <span>Lihat</span>
-                              </a>
+                              </button>
                             ) : <span className="text-slate-300 text-xs">—</span>}
                           </td>
+                          {canManage && (
+                            <td>
+                              <div className="flex items-center justify-end gap-1">
+                                {tx.status === 'active' && (
+                                  <button title="Tandai Dikembalikan"
+                                    onClick={() => setActionTx({ tx, type: 'return' })}
+                                    className="btn-ghost btn-sm text-emerald-600 hover:bg-emerald-50/80">
+                                    <Undo2 className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline">Kembalikan</span>
+                                  </button>
+                                )}
+                                <button title="Hapus Transaksi"
+                                  onClick={() => setActionTx({ tx, type: 'delete' })}
+                                  className="btn-ghost btn-sm text-rose-600 hover:bg-rose-50/80">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       )
                     })}
@@ -209,6 +282,76 @@ export default function Transactions() {
             </>
           )}
         </div>
+
+        {/* Modal: Lihat Foto Pengembalian */}
+        <Modal open={!!viewPhoto} onClose={() => setViewPhoto(null)} title="Foto Pengembalian" size="lg">
+          {viewPhoto && (
+            <div className="space-y-4">
+              <div className="text-xs text-slate-500">
+                <p><strong className="text-slate-800">{viewPhoto.asset_name}</strong> — dipinjam oleh {viewPhoto.borrower_name}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center">
+                <img
+                  src={viewPhoto.return_photo_url}
+                  alt={`Foto pengembalian ${viewPhoto.asset_name}`}
+                  className="max-w-full max-h-[60vh] object-contain"
+                />
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setViewPhoto(null)}>Tutup</button>
+                <a
+                  className="btn-primary w-full sm:w-auto justify-center"
+                  href={viewPhoto.return_photo_url}
+                  download={`foto-pengembalian-${viewPhoto.id}.jpg`}
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Foto</span>
+                </a>
+              </div>
+            </div>
+          )}
+        </Modal>
+        {/* Modal: Konfirmasi Tandai Dikembalikan */}
+        <Modal open={actionTx?.type === 'return'} onClose={() => setActionTx(null)} title="Tandai Dikembalikan" size="sm">
+          {actionTx?.type === 'return' && (
+            <div className="text-center space-y-4 py-2">
+              <p className="text-sm text-slate-700">
+                Yakin menandai transaksi <strong className="text-slate-900">{actionTx.tx.borrower_name}</strong> — <strong className="text-slate-900">{actionTx.tx.asset_name}</strong> sebagai dikembalikan?
+              </p>
+              <p className="text-xs text-slate-500">Aset akan otomatis kembali berstatus Tersedia. Aksi ini tercatat di audit log.</p>
+              <div className="flex flex-col-reverse sm:flex-row justify-center gap-2.5 pt-2">
+                <button className="btn-secondary btn-sm w-full sm:w-auto" onClick={() => setActionTx(null)}>Batal</button>
+                <button className="btn-primary btn-sm w-full sm:w-auto" disabled={actionLoading} onClick={handleForceReturn}>
+                  {actionLoading && <Spinner size="sm" className="text-white" />}
+                  {actionLoading ? 'Memproses...' : 'Ya, Tandai Dikembalikan'}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+
+        {/* Modal: Konfirmasi Hapus Transaksi */}
+        <Modal open={actionTx?.type === 'delete'} onClose={() => setActionTx(null)} title="Hapus Transaksi" size="sm">
+          {actionTx?.type === 'delete' && (
+            <div className="text-center space-y-4 py-2">
+              <p className="text-sm text-slate-700">
+                Yakin menghapus transaksi <strong className="text-slate-900">{actionTx.tx.borrower_name}</strong> — <strong className="text-slate-900">{actionTx.tx.asset_name}</strong>?
+              </p>
+              <p className="text-xs text-slate-500">
+                {actionTx.tx.status === 'active'
+                  ? 'Transaksi masih aktif — aset akan dikembalikan ke status Tersedia.'
+                  : 'Transaksi akan dihapus permanen dari riwayat.'}
+              </p>
+              <div className="flex flex-col-reverse sm:flex-row justify-center gap-2.5 pt-2">
+                <button className="btn-secondary btn-sm w-full sm:w-auto" onClick={() => setActionTx(null)}>Batal</button>
+                <button className="btn-danger btn-sm w-full sm:w-auto" disabled={actionLoading} onClick={handleDeleteTx}>
+                  {actionLoading && <Spinner size="sm" className="text-white" />}
+                  {actionLoading ? 'Memproses...' : 'Ya, Hapus'}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
       </div>
     </AdminLayout>
   )

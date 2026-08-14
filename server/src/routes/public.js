@@ -4,6 +4,21 @@ import pool from '../db/pool.js'
 
 const router = Router()
 
+// Terima angka KM dengan pemisah ribuan titik/koma (mis. "45.238" / "45,238" -> 45238)
+function sanitizeOdometer(value) {
+  if (value === null || value === undefined) return null
+  const s = String(value).trim()
+  if (!s) return null
+  if (/^\d{1,3}([.,]\d{3})+$/.test(s)) return parseInt(s.replace(/[.,]/g, ''), 10)
+  const n = Number(s)
+  return Number.isInteger(n) ? n : null
+}
+
+function kmValid(value) {
+  if (value === '' || value === null || value === undefined) return true
+  return sanitizeOdometer(value) !== null
+}
+
 // ─── GET /api/public/assets/:assetCode ────────────────────────────────────
 // Informasi aset + status untuk halaman scan (no auth, rate-limited dari index.js)
 router.get(
@@ -56,9 +71,9 @@ router.post(
     body('borrower_name').trim().notEmpty().withMessage('Nama peminjam wajib diisi'),
     body('borrower_contact').optional().trim(),
     body('purpose').optional().trim(),
-    body('estimated_duration_hours').optional().isNumeric().toFloat(),
-    body('expected_return_at').optional().isISO8601(),
-    body('odometer_start').optional().isInt({ min: 0 }).toInt(),
+    body('estimated_duration_hours').optional().isNumeric().withMessage('Durasi pinjam harus berupa angka (jam)').toFloat(),
+    body('expected_return_at').optional().isISO8601().withMessage('Format waktu rencana kembali tidak valid'),
+    body('odometer_start').optional().custom(kmValid).withMessage('KM awal harus berupa angka bulat >= 0').customSanitizer(sanitizeOdometer),
   ],
   async (req, res, next) => {
     try {
@@ -118,7 +133,7 @@ router.post(
             purpose || null,
             estimated_duration_hours || null,
             returnAt,
-            odometer_start || null,
+            odometer_start ?? null,
           ],
         )
 
@@ -149,8 +164,8 @@ router.post(
     body('asset_code').trim().notEmpty().withMessage('asset_code wajib diisi'),
     body('return_by_name').trim().notEmpty().withMessage('Nama wajib diisi'),
     body('return_note').optional().trim(),
-    body('odometer_end').optional().isInt({ min: 0 }).toInt(),
-    body('return_photo').optional().isString(),
+    body('odometer_end').optional().custom(kmValid).withMessage('KM akhir harus berupa angka bulat >= 0').customSanitizer(sanitizeOdometer),
+    body('return_photo').optional().isString().withMessage('Foto pengembalian tidak valid'),
   ],
   async (req, res, next) => {
     try {
@@ -206,7 +221,7 @@ router.post(
             return_by_name.trim(),
             return_note || null,
             return_photo_url,
-            odometer_end || null,
+            odometer_end ?? null,
             txRows[0].id,
           ],
         )

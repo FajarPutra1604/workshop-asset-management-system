@@ -56,6 +56,18 @@ router.get('/summary', async (_req, res, next) => {
       LIMIT 5
     `)
 
+    // 4b. Dikembalikan telat (returned_at > expected_return_at)
+    const { rows: lateRows } = await pool.query(`
+      SELECT COUNT(*) AS late_returns
+      FROM borrow_transactions bt
+      JOIN assets a ON a.id = bt.asset_id
+      WHERE bt.status = 'returned'
+        AND bt.returned_at IS NOT NULL
+        AND bt.expected_return_at IS NOT NULL
+        AND bt.returned_at > bt.expected_return_at
+        AND a.deleted_at IS NULL
+    `)
+
     // 5. Tren peminjaman 8 minggu terakhir
     const { rows: weeklyTrend } = await pool.query(`
       SELECT
@@ -81,6 +93,21 @@ router.get('/summary', async (_req, res, next) => {
       LIMIT 20
     `)
 
+    // 6b. Daftar transaksi dikembalikan telat (untuk review)
+    const { rows: lateReturnList } = await pool.query(`
+      SELECT bt.id, bt.borrower_name, bt.borrowed_at, bt.expected_return_at, bt.returned_at,
+             a.name AS asset_name, a.category
+      FROM borrow_transactions bt
+      JOIN assets a ON a.id = bt.asset_id
+      WHERE bt.status = 'returned'
+        AND bt.returned_at IS NOT NULL
+        AND bt.expected_return_at IS NOT NULL
+        AND bt.returned_at > bt.expected_return_at
+        AND a.deleted_at IS NULL
+      ORDER BY bt.returned_at DESC
+      LIMIT 20
+    `)
+
     const global = globalRows[0]
 
     res.json({
@@ -91,6 +118,7 @@ router.get('/summary', async (_req, res, next) => {
         maintenance: parseInt(global.maintenance, 10),
         lost: parseInt(global.lost, 10),
         overdue: parseInt(overdueRows[0].overdue, 10),
+        late_returns: parseInt(lateRows[0].late_returns, 10),
       },
       by_category: statusRows.map((r) => ({
         category: r.category,
@@ -109,6 +137,7 @@ router.get('/summary', async (_req, res, next) => {
         borrow_count: parseInt(r.borrow_count, 10),
       })),
       overdue_list: overdueList,
+      late_return_list: lateReturnList,
     })
   } catch (err) {
     next(err)

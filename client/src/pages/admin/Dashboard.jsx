@@ -11,7 +11,8 @@ import {
   Wrench,
   XCircle,
   Clock,
-  ChevronRight
+  ChevronRight,
+  History
 } from 'lucide-react'
 import AdminLayout from '../../components/AdminLayout'
 import { Badge } from '../../components/ui/Badge'
@@ -106,7 +107,7 @@ export default function Dashboard() {
     )
   }
 
-  const { summary, by_category, top_assets, weekly_trend, overdue_list } = data
+  const { summary, by_category, top_assets, weekly_trend, overdue_list, late_return_list } = data
 
   // Pie chart data — status breakdown
   const pieData = [
@@ -142,7 +143,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
           <StatCard label="Total Aset" value={summary.total_assets} icon={Package}
             iconBg="bg-slate-100 text-slate-700" />
           <StatCard label="Tersedia" value={summary.available} color="text-emerald-600" icon={CheckCircle2}
@@ -151,6 +152,8 @@ export default function Dashboard() {
             iconBg="bg-blue-50 text-blue-600" />
           <StatCard label="Overdue" value={summary.overdue} color="text-rose-600" icon={AlertTriangle}
             iconBg="bg-rose-50 text-rose-600" subtitle="Perlu follow-up" />
+          <StatCard label="Dikembalikan Telat" value={summary.late_returns} color="text-amber-600" icon={History}
+            iconBg="bg-amber-50 text-amber-600" subtitle="Setelah jatuh tempo" />
           <StatCard label="Maintenance" value={summary.maintenance} color="text-amber-600" icon={Wrench}
             iconBg="bg-amber-50 text-amber-600" />
           <StatCard label="Hilang" value={summary.lost} color="text-slate-500" icon={XCircle}
@@ -312,6 +315,63 @@ export default function Dashboard() {
                         </td>
                         <td className="font-bold text-rose-600 text-xs">
                           {hrs < 24 ? `${hrs} jam` : `${(hrs / 24).toFixed(1)} hari`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Dikembalikan Telat List */}
+        {late_return_list.length > 0 && (
+          <div className="card border-amber-200/80">
+            <div className="card-header bg-amber-50/40">
+              <h2 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                <History className="w-4 h-4 text-amber-600" />
+                <span>Transaksi Dikembalikan Telat</span>
+              </h2>
+              <span className="badge bg-amber-50 text-amber-700 border-amber-200/60">{late_return_list.length} item</span>
+            </div>
+            <div className="table-wrapper border-0 rounded-none shadow-none">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Peminjam</th>
+                    <th>Aset</th>
+                    <th>Mulai Pinjam</th>
+                    <th>Jatuh Tempo</th>
+                    <th>Dikembalikan</th>
+                    <th>Telat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {late_return_list.map(tx => {
+                    const ms = new Date(tx.returned_at) - new Date(tx.expected_return_at)
+                    const days = Math.floor(ms / 86400000)
+                    const hrs = Math.floor((ms % 86400000) / 3600000)
+                    return (
+                      <tr key={tx.id} className="bg-amber-50/20 hover:bg-amber-50/40">
+                        <td className="font-semibold text-slate-900">{tx.borrower_name}</td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-800">{tx.asset_name}</span>
+                            <Badge category={tx.category} />
+                          </div>
+                        </td>
+                        <td className="text-xs text-slate-500">
+                          {new Date(tx.borrowed_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="text-xs text-slate-500">
+                          {new Date(tx.expected_return_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="text-xs font-medium text-emerald-600">
+                          {new Date(tx.returned_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="font-bold text-amber-600 text-xs">
+                          {days > 0 ? `${days} hari ${hrs} jam` : `${hrs} jam`}
                         </td>
                       </tr>
                     )

@@ -5,6 +5,7 @@ import Transactions from './pages/admin/Transactions'
 import Dashboard from './pages/admin/Dashboard'
 import Settings from './pages/admin/Settings'
 import AdminUsers from './pages/admin/AdminUsers'
+import AuditLogs from './pages/admin/AuditLogs'
 import ScanPage from './pages/ScanPage'
 import ScanSuccess from './pages/ScanSuccess'
 
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/admin/transactions" element={<PrivateRoute element={<Transactions />} />} />
       <Route path="/admin/settings" element={<PrivateRoute element={<Settings />} />} />
       <Route path="/admin/admin-users" element={<PrivateRoute element={<AdminUsers />} />} />
+      <Route path="/admin/audit-logs" element={<PrivateRoute element={<AuditLogs />} />} />
 
       {/* Default fallback */}
       <Route path="*" element={<Navigate to="/admin/login" replace />} />

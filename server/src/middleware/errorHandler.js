@@ -6,7 +6,8 @@
 export function errorHandler(err, _req, res, _next) {
   // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'Ukuran file terlalu besar. Maksimum 2MB.' })
+    const mb = Math.round((Number(process.env.MAX_FILE_SIZE_BYTES) || 2 * 1024 * 1024) / (1024 * 1024) * 10) / 10
+    return res.status(413).json({ error: `Ukuran file terlalu besar. Maksimum ${mb}MB.` })
   }
 
   // Express-validator / manual validation errors (thrown with status 400/422)

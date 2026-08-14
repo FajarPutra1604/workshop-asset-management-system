@@ -4,12 +4,14 @@ import { body, validationResult } from 'express-validator'
 import pool from '../db/pool.js'
 import { signToken } from '../utils/jwt.js'
 import { requireAuth } from '../middleware/auth.js'
+import { loginRateLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
 
 // POST /api/auth/login
 router.post(
   '/login',
+  loginRateLimiter,
   [
     body('email').isEmail().withMessage('Email tidak valid'),
     body('password').isLength({ min: 1 }).withMessage('Password wajib diisi'),

@@ -70,6 +70,10 @@ export default function BorrowForm({ asset, onSubmit }) {
       return
     }
 
+    const odometer_start = asset.category === 'vehicle' && form.odometer_start
+      ? String(form.odometer_start).trim()
+      : null
+
     setLoading(true); setError(null)
     try {
       const returnAtIso = new Date(form.expected_return_at).toISOString()
@@ -80,9 +84,7 @@ export default function BorrowForm({ asset, onSubmit }) {
         purpose: form.purpose || undefined,
         expected_return_at: returnAtIso,
         estimated_duration_hours: durationHours > 0 ? durationHours : undefined,
-        odometer_start: asset.category === 'vehicle' && form.odometer_start
-          ? Number(form.odometer_start)
-          : undefined,
+        odometer_start: asset.category === 'vehicle' ? odometer_start : undefined,
       })
     } catch (e) {
       setError(e.message || 'Terjadi kesalahan')
@@ -231,12 +233,13 @@ export default function BorrowForm({ asset, onSubmit }) {
         <div>
           <label className="label">KM Awal <span className="text-slate-400 font-normal lowercase">(opsional)</span></label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             className="input"
             value={form.odometer_start}
             onChange={e => set('odometer_start', e.target.value)}
-            placeholder="Misal: 45000"
-            min="0"
+            placeholder="Misal: 45000 (boleh pakai titik ribuan: 45.000)"
+            pattern="[0-9.,]*"
           />
         </div>
       )}

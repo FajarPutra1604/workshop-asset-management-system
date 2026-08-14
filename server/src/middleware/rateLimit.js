@@ -12,3 +12,14 @@ export const publicRateLimiter = rateLimit({
     error: `Terlalu banyak request. Coba lagi dalam ${WINDOW_MS / 1000} detik.`,
   },
 })
+
+// Limit khusus login (anti brute-force): 10 percobaan per 5 menit per IP
+export const loginRateLimiter = rateLimit({
+  windowMs: 5 * 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Terlalu banyak percobaan login. Coba lagi dalam 5 menit.',
+  },
+})

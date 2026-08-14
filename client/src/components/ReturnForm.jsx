@@ -43,8 +43,14 @@ export default function ReturnForm({ asset, activeTx, onSubmit }) {
       setPhotoPreview(URL.createObjectURL(compressed))
     } catch (err) {
       console.error('Compression error:', err)
-      setPhoto(file)
-      setPhotoPreview(URL.createObjectURL(file))
+      if (file.size > 3 * 1024 * 1024) {
+        setError('Gagal mengkompresi foto dan ukuran file terlalu besar. Pilih foto lain yang lebih kecil (max 3MB).')
+        setPhoto(null)
+        setPhotoPreview(null)
+      } else {
+        setPhoto(file)
+        setPhotoPreview(URL.createObjectURL(file))
+      }
     } finally {
       setCompressing(false)
     }
@@ -67,13 +73,15 @@ export default function ReturnForm({ asset, activeTx, onSubmit }) {
       return
     }
 
+    const odometer_end = form.odometer_end ? String(form.odometer_end).trim() : null
+
     setLoading(true); setError(null)
     try {
       const payload = {
         asset_code: asset.asset_code,
         return_by_name: form.return_by_name,
         return_note: form.return_note || null,
-        odometer_end: form.odometer_end ? Number(form.odometer_end) : null,
+        odometer_end,
         return_photo: photo ? await toBase64(photo) : null,
       }
 
@@ -145,12 +153,13 @@ export default function ReturnForm({ asset, activeTx, onSubmit }) {
         <div>
           <label className="label">KM Akhir <span className="text-slate-400 font-normal lowercase">(opsional)</span></label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             className="input"
             value={form.odometer_end}
             onChange={e => set('odometer_end', e.target.value)}
-            placeholder="Misal: 45238"
-            min="0"
+            placeholder="Misal: 45238 (boleh pakai titik ribuan: 45.238)"
+            pattern="[0-9.,]*"
           />
         </div>
       )}

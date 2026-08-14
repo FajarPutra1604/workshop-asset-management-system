@@ -6,7 +6,40 @@ import ReturnForm from '../components/ReturnForm'
 import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+const API = import.meta.env.VITE_API_URL || '/api'
+
+function formatLateDuration(iso) {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms <= 0) return ''
+  const mins = Math.floor(ms / 60000)
+  const days = Math.floor(mins / 1440)
+  const hrs = Math.floor((mins % 1440) / 60)
+  if (days > 0) return hrs > 0 ? `${days} hari ${hrs} jam` : `${days} hari`
+  return `${hrs} jam`
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function OverdueBanner({ expectedReturnAt }) {
+  const late = formatLateDuration(expectedReturnAt)
+  if (!late) return null
+  return (
+    <div className="rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 flex gap-3 animate-fade-in">
+      <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center flex-shrink-0 shadow-subtle">
+        <AlertTriangle className="w-5 h-5" />
+      </div>
+      <div className="text-xs text-rose-800 leading-relaxed">
+        <p className="font-bold text-rose-900 text-sm">Pengembalian Telat</p>
+        <p className="mt-1">
+          Telat <strong className="text-rose-900">{late}</strong> dari jadwal kembali ({formatDate(expectedReturnAt)}).
+        </p>
+        <p className="mt-0.5 text-rose-700">Mohon segera kembalikan aset ini ke workshop.</p>
+      </div>
+    </div>
+  )
+}
 
 function StatusInfo({ asset, activeTx }) {
   if (asset.status === 'maintenance') {
@@ -164,6 +197,9 @@ export default function ScanPage() {
 
       {/* Body */}
       <div className="max-w-md mx-auto px-4 py-6 animate-fade-in space-y-4">
+        {activeTx?.expected_return_at && (
+          <OverdueBanner expectedReturnAt={activeTx.expected_return_at} />
+        )}
         {!canInteract ? (
           <div className="card">
             <div className="card-body">

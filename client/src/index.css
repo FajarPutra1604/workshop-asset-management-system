@@ -4,6 +4,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Area cetak QR massal: tersembunyi di layar, tampil saat print */
+.print-only {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
+  .print-only {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .print-only .qr-label {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
 @layer base {
   :root {
     --color-primary: 99 102 241;   /* indigo-500 */

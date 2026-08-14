@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { body, query, validationResult } from 'express-validator'
 import pool from '../db/pool.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireMinLevel } from '../middleware/authorize.js'
 import { validateQueryCategory, validateQueryAssetStatus } from '../middleware/dynamicValidate.js'
 
 const router = Router()
@@ -85,7 +86,14 @@ router.get(
                     AND bt.expected_return_at IS NOT NULL
                     AND bt.expected_return_at < NOW()
                   THEN true ELSE false
-                END AS is_overdue
+                END AS is_overdue,
+                CASE
+                  WHEN bt.status = 'returned'
+                    AND bt.returned_at IS NOT NULL
+                    AND bt.expected_return_at IS NOT NULL
+                    AND bt.returned_at > bt.expected_return_at
+                  THEN true ELSE false
+                END AS is_late_return
          FROM borrow_transactions bt
          JOIN assets a ON a.id = bt.asset_id
          WHERE ${where}
@@ -103,5 +111,79 @@ router.get(
     }
   },
 )
+
+// ─── PUT /api/transactions/:id/return (force return) ────────────────────────
+router.put('/:id/return', requireMinLevel('admin'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM borrow_transactions WHERE id = $1',
+      [req.params.id],
+    )
+    if (rows.length === 0) return res.status(404).json({ error: 'Transaksi tidak ditemukan' })
+    const tx = rows[0]
+    if (tx.status !== 'active') {
+      return res.status(409).json({ error: 'Hanya transaksi berstatus aktif yang bisa ditandai dikembalikan' })
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `UPDATE borrow_transactions SET
+           status = 'returned', returned_at = NOW(),
+           return_by_name = $1, return_note = 'Dikembalikan paksa oleh admin'
+         WHERE id = $2`,
+        [req.admin.name, tx.id],
+      )
+      await client.query(
+        "UPDATE assets SET status = 'available', updated_at = NOW() WHERE id = $1",
+        [tx.asset_id],
+      )
+      await client.query('SELECT log_audit($1,$2,$3,$4,$5,$6)', [
+        req.admin.id, req.admin.name, 'force_return', 'borrow_transactions',
+        String(tx.id), JSON.stringify({ asset_id: tx.asset_id, borrower_name: tx.borrower_name }),
+      ])
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+    res.json({ message: 'Transaksi ditandai dikembalikan' })
+  } catch (err) { next(err) }
+})
+
+// ─── DELETE /api/transactions/:id ────────────────────────────────────────────
+router.delete('/:id', requireMinLevel('admin'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM borrow_transactions WHERE id = $1', [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ error: 'Transaksi tidak ditemukan' })
+    const tx = rows[0]
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      if (tx.status === 'active') {
+        await client.query(
+          "UPDATE assets SET status = 'available', updated_at = NOW() WHERE id = $1 AND status = 'borrowed'",
+          [tx.asset_id],
+        )
+      }
+      await client.query('DELETE FROM borrow_transactions WHERE id = $1', [tx.id])
+      await client.query('SELECT log_audit($1,$2,$3,$4,$5,$6)', [
+        req.admin.id, req.admin.name, 'delete_transaction', 'borrow_transactions',
+        String(tx.id), JSON.stringify({ asset_id: tx.asset_id, borrower_name: tx.borrower_name, status: tx.status }),
+      ])
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+    res.json({ message: 'Transaksi dihapus' })
+  } catch (err) { next(err) }
+})
 
 export default router

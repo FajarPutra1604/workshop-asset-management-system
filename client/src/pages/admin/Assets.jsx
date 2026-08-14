@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, QrCode, Pencil, Trash2, Wrench, ChevronLeft, ChevronRight } from 'lucide-react'
+import imageCompression from 'browser-image-compression'
+import { Plus, Search, QrCode, Pencil, Trash2, Wrench, ChevronLeft, ChevronRight, FileSpreadsheet, Download, Upload, Camera, Printer } from 'lucide-react'
 import AdminLayout from '../../components/AdminLayout'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Spinner } from '../../components/ui/Spinner'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { QRCodeDisplay } from '../../components/QRCodeDisplay'
+import { QRCodeDisplay, QRCodePrint } from '../../components/QRCodeDisplay'
 import client from '../../api/client'
 
 const EMPTY_FORM = {
@@ -14,17 +15,51 @@ const EMPTY_FORM = {
   location: '', capacity: '',
 }
 
-function AssetForm({ initial, onSubmit, loading, error, constants }) {
+const COMPRESSION_OPTIONS = {
+  maxSizeMB: 0.2,
+  maxWidthOrHeight: 1920,
+  useWebWorker: true,
+}
+
+function AssetForm({ initial, onSubmit, loading, error, constants, initialPhoto }) {
   const [form, setForm] = useState(initial || EMPTY_FORM)
   const [photo, setPhoto] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(initialPhoto || null)
+  const [removePhoto, setRemovePhoto] = useState(false)
+  const [compressing, setCompressing] = useState(false)
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setRemovePhoto(false)
+    setCompressing(true)
+    try {
+      const compressed = await imageCompression(file, COMPRESSION_OPTIONS)
+      setPhoto(compressed)
+      setPhotoPreview(URL.createObjectURL(compressed))
+    } catch (err) {
+      console.error('Compression error:', err)
+      setPhoto(file)
+      setPhotoPreview(URL.createObjectURL(file))
+    } finally {
+      setCompressing(false)
+    }
+  }
+
+  function handleRemovePhoto() {
+    setRemovePhoto(true)
+    setPhoto(null)
+    setPhotoPreview(null)
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => { if (v !== '') fd.append(k, v) })
     if (photo) fd.append('photo', photo)
+    if (removePhoto) fd.append('remove_photo', '1')
     onSubmit(fd)
   }
 
@@ -67,13 +102,41 @@ function AssetForm({ initial, onSubmit, loading, error, constants }) {
 
         <div className="sm:col-span-2">
           <label className="label">Foto Aset</label>
-          <input type="file" accept="image/*"
-            onChange={e => setPhoto(e.target.files[0])}
-            className="block w-full text-xs text-slate-600
-                       file:mr-3 file:py-2 file:px-3.5 file:rounded-xl
-                       file:border-0 file:text-xs file:font-semibold
-                       file:bg-indigo-50 file:text-indigo-700
-                       hover:file:bg-indigo-100 cursor-pointer transition-all" />
+          <label className="block w-full rounded-2xl border-2 border-dashed cursor-pointer
+                         transition-all overflow-hidden
+                         ${photoPreview ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/80'}">
+            <input type="file" accept="image/*" capture="environment"
+              onChange={handlePhotoChange} className="sr-only" />
+            {compressing ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-2">
+                <Spinner />
+                <p className="text-xs font-medium text-slate-500">Mengkompresi foto...</p>
+              </div>
+            ) : photoPreview ? (
+              <div className="relative">
+                <img src={photoPreview} alt="Preview" className="w-full max-h-44 object-cover" />
+                <span className="absolute top-2.5 right-2.5 bg-emerald-600 text-white text-[11px] font-semibold px-2 py-0.5 rounded-lg">
+                  {initialPhoto && !photo ? 'Foto saat ini' : 'Siap upload'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-6 gap-1.5 text-slate-500">
+                <Camera className="w-6 h-6" />
+                <p className="text-xs font-semibold text-slate-700">Pilih / ambil foto</p>
+                <p className="text-[11px] text-slate-400">Otomatis dikompresi ke max 200KB</p>
+              </div>
+            )}
+          </label>
+          {photoPreview && (
+            <button type="button" onClick={handleRemovePhoto}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-rose-600 hover:text-rose-800">
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Hapus Foto</span>
+            </button>
+          )}
+          {removePhoto && (
+            <p className="mt-1 text-[11px] text-rose-500">Foto aset akan dihapus saat disimpan.</p>
+          )}
         </div>
       </div>
 
@@ -123,6 +186,176 @@ function AssetForm({ initial, onSubmit, loading, error, constants }) {
   )
 }
 
+function ImportExcelModal({ categories, onClose, onImported }) {
+  const [selected, setSelected] = useState(null)
+  const [file, setFile] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [result, setResult] = useState(null)
+
+  async function downloadTemplate(cat) {
+    try {
+      const res = await client.get(`/assets/import-template/${cat.slug}`, { responseType: 'blob' })
+      const url = URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `template-${cat.slug}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e.response?.data?.error || 'Gagal mengunduh template')
+    }
+  }
+
+  async function handleImport() {
+    if (!file || !selected) return
+    setLoading(true); setError(null); setResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('category', selected.slug)
+      const { data } = await client.post('/assets/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setResult(data)
+      setFile(null)
+      onImported()
+    } catch (e) {
+      setError(e.response?.data?.error || 'Gagal melakukan import')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">{error}</div>
+      )}
+
+      {result && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+              {result.imported} berhasil
+            </span>
+            {result.skipped > 0 && (
+              <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                {result.skipped} dilewati (nama sudah ada)
+              </span>
+            )}
+          </div>
+          {result.errors.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-600 mb-1.5">{result.errors.length} baris bermasalah:</p>
+              <ul className="max-h-36 overflow-y-auto space-y-1 text-xs text-slate-500">
+                {result.errors.map((e, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-slate-400 font-mono flex-shrink-0">Baris {e.row > 0 ? e.row : '-'}</span>
+                    <span className="truncate">{[e.name, e.error].filter(Boolean).join(' — ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div>
+        <label className="label label-required">1. Pilih Kategori</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {(categories || []).map((c) => (
+            <button
+              key={c.slug}
+              type="button"
+              onClick={() => { setSelected(c); setResult(null); setError(null) }}
+              className={`px-3 py-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-center gap-2
+                ${selected?.slug === c.slug
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-500/20'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50/40'}`}
+            >
+              <span>{c.icon}</span>
+              <span>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selected && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+          <div className="text-xs text-slate-600 leading-relaxed">
+            <p className="font-bold text-slate-800 text-sm mb-0.5">Template {selected.name}</p>
+            <p>Kolom wajib: <strong>Nama Aset</strong>. Baris dengan nama sudah ada otomatis dilewati.</p>
+          </div>
+          <button type="button" className="btn-secondary w-full sm:w-auto justify-center flex-shrink-0" onClick={() => downloadTemplate(selected)}>
+            <Download className="w-4 h-4" />
+            <span>Download Template</span>
+          </button>
+        </div>
+      )}
+
+      <div>
+        <label className="label">2. Upload File Excel</label>
+        <input
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          onChange={(e) => { setFile(e.target.files[0]); setResult(null); setError(null) }}
+          className="block w-full text-xs text-slate-600
+                     file:mr-3 file:py-2 file:px-3.5 file:rounded-xl
+                     file:border-0 file:text-xs file:font-semibold
+                     file:bg-indigo-50 file:text-indigo-700
+                     hover:file:bg-indigo-100 cursor-pointer transition-all"
+        />
+      </div>
+
+      <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-2 border-t border-slate-100">
+        <button className="btn-secondary w-full sm:w-auto justify-center" onClick={onClose}>Tutup</button>
+        <button className="btn-primary w-full sm:w-auto justify-center" disabled={!file || !selected || loading} onClick={handleImport}>
+          {loading && <Spinner size="sm" className="text-white" />}
+          <Upload className="w-4 h-4" />
+          <span>{loading ? 'Mengimpor...' : 'Import Excel'}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PrintQRModal({ assets, loading, onClose }) {
+  return (
+    <div className="space-y-4">
+      {loading ? (
+        <div className="flex items-center justify-center py-10"><Spinner size="lg" /></div>
+      ) : assets.length === 0 ? (
+        <div className="text-center py-10 text-sm text-slate-500">
+          <QrCode className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+          Tidak ada aset untuk dicetak. Ubah filter atau tambah aset dulu.
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500">
+              <strong className="text-slate-800">{assets.length}</strong> aset siap dicetak
+            </p>
+            <p className="text-[11px] text-slate-400">Klik Print untuk mencetak label QR</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-96 overflow-y-auto bg-white rounded-xl border border-slate-200/70 p-3">
+            {assets.map((a) => (
+              <QRCodePrint key={a.id} assetCode={a.asset_code} assetName={a.name} />
+            ))}
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-2 border-t border-slate-100">
+            <button className="btn-secondary w-full sm:w-auto justify-center" onClick={onClose}>Tutup</button>
+            <button className="btn-primary w-full sm:w-auto justify-center" onClick={() => window.print()}>
+              <Printer className="w-4 h-4" />
+              <span>Print QR</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 const ADMIN_KEY = 'wabt_admin'
 
 function getRole() {
@@ -144,6 +377,10 @@ export default function Assets() {
   const [modalEdit, setModalEdit] = useState(null)   // asset object
   const [modalQR, setModalQR] = useState(null)       // asset object
   const [modalDelete, setModalDelete] = useState(null) // asset object
+  const [modalImport, setModalImport] = useState(false)
+  const [modalPrint, setModalPrint] = useState(false)
+  const [printAssets, setPrintAssets] = useState([])
+  const [printLoading, setPrintLoading] = useState(false)
 
   const [formLoading, setFormLoading] = useState(false)
   const [formError, setFormError] = useState(null)
@@ -202,6 +439,42 @@ export default function Assets() {
 
   const setFilter = (k, v) => { setFilters(f => ({ ...f, [k]: v })); setPage(1) }
 
+  async function handleExport() {
+    try {
+      const params = { ...filters }
+      Object.keys(params).forEach(k => { if (!params[k]) delete params[k] })
+      const res = await client.get('/assets/export', { params, responseType: 'blob' })
+      const url = URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'export-aset.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert(e.response?.data?.error || 'Gagal export Excel')
+    }
+  }
+
+  async function openPrintModal() {
+    setModalPrint(true)
+    setPrintLoading(true)
+    setPrintAssets([])
+    try {
+      const params = {}
+      if (filters.category) params.category = filters.category
+      if (filters.status) params.status = filters.status
+      const { data } = await client.get('/assets/print', { params })
+      setPrintAssets(data.data)
+    } catch (e) {
+      alert(e.response?.data?.error || 'Gagal memuat data QR')
+      setModalPrint(false)
+    } finally {
+      setPrintLoading(false)
+    }
+  }
+
   return (
     <AdminLayout>
       <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in space-y-4 sm:space-y-5">
@@ -214,10 +487,24 @@ export default function Assets() {
             </p>
           </div>
           {canWrite && (
-            <button className="btn-primary w-full sm:w-auto justify-center" onClick={() => { setFormError(null); setModalCreate(true) }}>
-              <Plus className="w-4 h-4" />
-              <span>Tambah Aset</span>
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button className="btn-secondary w-full sm:w-auto justify-center" onClick={handleExport}>
+                <Download className="w-4 h-4" />
+                <span>Export Excel</span>
+              </button>
+              <button className="btn-secondary w-full sm:w-auto justify-center" onClick={openPrintModal}>
+                <QrCode className="w-4 h-4" />
+                <span>Cetak QR</span>
+              </button>
+              <button className="btn-secondary w-full sm:w-auto justify-center" onClick={() => { setModalImport(true) }}>
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import Excel</span>
+              </button>
+              <button className="btn-primary w-full sm:w-auto justify-center" onClick={() => { setFormError(null); setModalCreate(true) }}>
+                <Plus className="w-4 h-4" />
+                <span>Tambah Aset</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -379,16 +666,17 @@ export default function Assets() {
                 category: modalEdit.category,
                 description: modalEdit.description || '',
                 status: modalEdit.status,
-                model: modalEdit.vehicle_detail?.model || '',
-                plate_number: modalEdit.vehicle_detail?.plate_number || '',
-                last_odometer: modalEdit.vehicle_detail?.last_odometer || '',
-                location: modalEdit.room_detail?.location || '',
-                capacity: modalEdit.room_detail?.capacity || '',
+                model: modalEdit.model || '',
+                plate_number: modalEdit.plate_number || '',
+                last_odometer: modalEdit.last_odometer || '',
+                location: modalEdit.location || '',
+                capacity: modalEdit.capacity || '',
               }}
               onSubmit={handleUpdate}
               loading={formLoading}
               error={formError}
               constants={constants}
+              initialPhoto={modalEdit.photo_url || null}
             />
           )}
         </Modal>
@@ -397,6 +685,29 @@ export default function Assets() {
         <Modal open={!!modalQR} onClose={() => setModalQR(null)} title="QR Code Aset" size="sm">
           {modalQR && <QRCodeDisplay assetCode={modalQR.asset_code} assetName={modalQR.name} />}
         </Modal>
+
+        {/* Modal: Import Excel */}
+        <Modal open={modalImport} onClose={() => setModalImport(false)} title="Import Aset dari Excel" size="lg">
+          <ImportExcelModal categories={constants?.categories} onClose={() => setModalImport(false)} onImported={fetchAssets} />
+        </Modal>
+
+        {/* Modal: Cetak QR Massal */}
+        <Modal open={modalPrint} onClose={() => setModalPrint(false)} title="Cetak QR Massal" size="lg">
+          <PrintQRModal assets={printAssets} loading={printLoading} onClose={() => setModalPrint(false)} />
+        </Modal>
+
+        {/* Area cetak QR (hanya tampil saat print) */}
+        {modalPrint && printAssets.length > 0 && (
+          <div className="print-only">
+            <div className="grid grid-cols-3 gap-4 p-6">
+              {printAssets.map((a) => (
+                <div key={a.id} className="qr-label">
+                  <QRCodePrint assetCode={a.asset_code} assetName={a.name} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Modal: Delete Confirmation */}
         <Modal open={!!modalDelete} onClose={() => setModalDelete(null)} title="Hapus Aset" size="sm">
