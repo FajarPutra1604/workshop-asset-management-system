@@ -12,7 +12,7 @@ import client from '../../api/client'
 const EMPTY_FORM = {
   name: '', category: '', description: '', status: 'available',
   model: '', plate_number: '', last_odometer: '',
-  location: '', capacity: '',
+  location: '', capacity: '', quantity: '',
 }
 
 const COMPRESSION_OPTIONS = {
@@ -99,6 +99,19 @@ function AssetForm({ initial, onSubmit, loading, error, constants, initialPhoto 
           <textarea className="input" rows={2} value={form.description}
             onChange={e => set('description', e.target.value)} placeholder="Deskripsi singkat..." />
         </div>
+
+        {form.category === 'tool' && !initial && (
+          <div className="sm:col-span-2">
+            <label className="label">Jumlah Unit <span className="text-slate-400 font-normal lowercase">(barang yang sama banyak)</span></label>
+            <input type="number" min="1" max="500" className="input" value={form.quantity}
+              onChange={e => set('quantity', e.target.value)} placeholder="Misal: 20 (1 = satu barang)" />
+            {Number(form.quantity) > 1 && (
+              <p className="mt-1.5 text-[11px] font-medium text-indigo-600">
+                Akan membuat {form.quantity} unit: "{form.name || 'Nama Aset'} (Unit 1)" s/d "(Unit {form.quantity})", masing-masing dengan QR sendiri.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="sm:col-span-2">
           <label className="label">Foto Aset</label>
@@ -286,6 +299,9 @@ function ImportExcelModal({ categories, onClose, onImported }) {
           <div className="text-xs text-slate-600 leading-relaxed">
             <p className="font-bold text-slate-800 text-sm mb-0.5">Template {selected.name}</p>
             <p>Kolom wajib: <strong>Nama Aset</strong>. Baris dengan nama sudah ada otomatis dilewati.</p>
+            {selected.slug === 'tool' && (
+              <p className="text-[11px] text-slate-500 mt-1">Template Barang punya kolom <strong>Jumlah</strong> (opsional) — isi angka untuk membuat banyak unit sekaligus.</p>
+            )}
           </div>
           <button type="button" className="btn-secondary w-full sm:w-auto justify-center flex-shrink-0" onClick={() => downloadTemplate(selected)}>
             <Download className="w-4 h-4" />
@@ -475,6 +491,13 @@ export default function Assets() {
     }
   }
 
+  // Hitung jumlah unit per nama dasar (untuk badge "×N" barang yang sama)
+  const unitCounts = {}
+  assets.forEach((a) => {
+    const base = a.name.replace(/\s*\(Unit \d+\)\s*$/i, '')
+    unitCounts[base] = (unitCounts[base] || 0) + 1
+  })
+
   return (
     <AdminLayout>
       <div className="p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in space-y-4 sm:space-y-5">
@@ -567,7 +590,10 @@ export default function Assets() {
                     </tr>
                   </thead>
                   <tbody>
-                    {assets.map(asset => (
+                    {assets.map(asset => {
+                      const base = asset.name.replace(/\s*\(Unit \d+\)\s*$/i, '')
+                      const unitCount = unitCounts[base] || 1
+                      return (
                       <tr key={asset.id}>
                         <td>
                           <div className="flex items-center gap-3">
@@ -580,7 +606,12 @@ export default function Assets() {
                               </div>
                             )}
                             <div>
-                              <p className="font-semibold text-slate-900">{asset.name}</p>
+                              <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                                {asset.name}
+                                {unitCount > 1 && (
+                                  <span className="badge bg-indigo-50 text-indigo-600 border-indigo-200/60 px-1.5 py-0 text-[10px]">×{unitCount}</span>
+                                )}
+                              </p>
                               {asset.description && (
                                 <p className="text-xs text-slate-500 truncate max-w-xs">{asset.description}</p>
                               )}
@@ -622,7 +653,8 @@ export default function Assets() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

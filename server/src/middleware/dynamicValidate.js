@@ -11,6 +11,14 @@ const cache = { categories: null, assetStatuses: null, txStatuses: null }
 let lastFetch = 0
 const CACHE_TTL = 60000
 
+// Dipanggil saat master kategori/status berubah agar validasi langsung pakai data baru
+export function invalidateValidValues() {
+  cache.categories = null
+  cache.assetStatuses = null
+  cache.txStatuses = null
+  lastFetch = 0
+}
+
 async function getValidValues() {
   const now = Date.now()
   if (!cache.categories || now - lastFetch > CACHE_TTL) {

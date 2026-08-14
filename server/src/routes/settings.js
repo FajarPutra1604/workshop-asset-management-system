@@ -3,6 +3,7 @@ import { body, param, validationResult } from 'express-validator'
 import pool from '../db/pool.js'
 import { requireAuth } from '../middleware/auth.js'
 import { requireMinLevel } from '../middleware/authorize.js'
+import { invalidateValidValues } from '../middleware/dynamicValidate.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -52,8 +53,9 @@ router.post('/categories',
       const { rows } = await pool.query(
         `INSERT INTO asset_categories (slug, name, icon, color, description, sort_order)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [slug, name, icon || '', color || '#6366f1', description || '', sort_order || 0]
+         [slug, name, icon || '', color || '#6366f1', description || '', sort_order || 0]
       )
+      invalidateValidValues()
       res.status(201).json(rows[0])
     } catch (err) {
       if (err.code === '23505') return res.status(409).json({ error: 'Slug kategori sudah ada' })
@@ -79,6 +81,7 @@ router.put('/categories/:slug',
         [req.params.slug, ...vals]
       )
       if (rows.length === 0) return res.status(404).json({ error: 'Kategori tidak ditemukan' })
+      invalidateValidValues()
       res.json(rows[0])
     } catch (err) { next(err) }
   }
@@ -88,6 +91,7 @@ router.delete('/categories/:slug', requireMinLevel('superadmin'), async (req, re
   try {
     const { rowCount } = await pool.query('DELETE FROM asset_categories WHERE slug = $1', [req.params.slug])
     if (rowCount === 0) return res.status(404).json({ error: 'Kategori tidak ditemukan' })
+    invalidateValidValues()
     res.json({ message: 'Kategori berhasil dihapus' })
   } catch (err) { next(err) }
 })
@@ -111,8 +115,9 @@ router.post('/asset-statuses',
       const { rows } = await pool.query(
         `INSERT INTO asset_statuses (slug, name, color, badge_class, sort_order)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [slug, name, color || '#6366f1', badge_class || '', sort_order || 0]
+         [slug, name, color || '#6366f1', badge_class || '', sort_order || 0]
       )
+      invalidateValidValues()
       res.status(201).json(rows[0])
     } catch (err) {
       if (err.code === '23505') return res.status(409).json({ error: 'Slug status sudah ada' })
@@ -136,6 +141,7 @@ router.put('/asset-statuses/:slug',
         [req.params.slug, ...vals]
       )
       if (rows.length === 0) return res.status(404).json({ error: 'Status tidak ditemukan' })
+      invalidateValidValues()
       res.json(rows[0])
     } catch (err) { next(err) }
   }
@@ -145,6 +151,7 @@ router.delete('/asset-statuses/:slug', requireMinLevel('superadmin'), async (req
   try {
     const { rowCount } = await pool.query('DELETE FROM asset_statuses WHERE slug = $1', [req.params.slug])
     if (rowCount === 0) return res.status(404).json({ error: 'Status tidak ditemukan' })
+    invalidateValidValues()
     res.json({ message: 'Status berhasil dihapus' })
   } catch (err) { next(err) }
 })
@@ -169,6 +176,7 @@ router.post('/transaction-statuses',
         `INSERT INTO transaction_statuses (slug, name, color, sort_order) VALUES ($1, $2, $3, $4) RETURNING *`,
         [slug, name, color || '#6366f1', sort_order || 0]
       )
+      invalidateValidValues()
       res.status(201).json(rows[0])
     } catch (err) {
       if (err.code === '23505') return res.status(409).json({ error: 'Slug status sudah ada' })
@@ -188,6 +196,7 @@ router.put('/transaction-statuses/:slug', requireMinLevel('superadmin'), async (
       [req.params.slug, ...vals]
     )
     if (rows.length === 0) return res.status(404).json({ error: 'Status tidak ditemukan' })
+    invalidateValidValues()
     res.json(rows[0])
   } catch (err) { next(err) }
 })
@@ -196,6 +205,7 @@ router.delete('/transaction-statuses/:slug', requireMinLevel('superadmin'), asyn
   try {
     const { rowCount } = await pool.query('DELETE FROM transaction_statuses WHERE slug = $1', [req.params.slug])
     if (rowCount === 0) return res.status(404).json({ error: 'Status tidak ditemukan' })
+    invalidateValidValues()
     res.json({ message: 'Status berhasil dihapus' })
   } catch (err) { next(err) }
 })

@@ -126,6 +126,7 @@ router.get('/import-template/:category', async (req, res, next) => {
       { header: 'Nama Aset', width: 26 },
       { header: 'Status', width: 14 },
       { header: 'Deskripsi', width: 40 },
+      ...(cat.slug === 'tool' ? [{ header: 'Jumlah', width: 10 }] : []),
       ...(isVehicle
         ? [
             { header: 'Model', width: 20 },
@@ -164,7 +165,7 @@ router.get('/import-template/:category', async (req, res, next) => {
         ? ['Toyota Avanza', 'available', 'Mobil operasional', 'Avanza 1.3 E', 'B 1234 XYZ', '45000']
         : cat.slug === 'room'
           ? ['Meeting Room A', '', 'Ruang meeting lantai 2', 'Gedung A', '10']
-          : ['Kunci No. 13', 'available', 'Kunci pas ukuran 13 mm']
+          : ['Kunci No. 13', 'available', 'Kunci pas ukuran 13 mm', '5']
 
     const guide = wb.addWorksheet('Petunjuk')
     guide.columns = [{ width: 100 }]
@@ -175,9 +176,12 @@ router.get('/import-template/:category', async (req, res, next) => {
       ['2. Status (pilih dari dropdown, boleh dikosongkan = Tersedia):'],
       ...statuses.map((s) => [`   - ${s.slug} = ${s.name}`]),
       [''],
-      ['3. Baris dengan nama aset yang sudah ada di sistem akan dilewati (tidak di-import).'],
-      ['4. Isi data mulai dari baris ke-2. Jangan mengubah atau menambah kolom header.'],
-      ['5. Simpan file lalu upload di menu Manajemen Aset -> Import Excel (pilih kategori yang sama).'],
+      ...(cat.slug === 'tool'
+        ? ['3. Kolom Jumlah (opsional): isi angka banyaknya unit barang yang sama. Contoh Jumlah=5 akan membuat "Kunci No. 13 (Unit 1)" s/d "(Unit 5)", masing-masing dengan QR sendiri.', '']
+        : []),
+      [`${cat.slug === 'tool' ? '4' : '3'}. Baris dengan nama aset yang sudah ada di sistem akan dilewati (tidak di-import).`],
+      [`${cat.slug === 'tool' ? '5' : '4'}. Isi data mulai dari baris ke-2. Jangan mengubah atau menambah kolom header.`],
+      [`${cat.slug === 'tool' ? '6' : '5'}. Simpan file lalu upload di menu Manajemen Aset -> Import Excel (pilih kategori yang sama).`],
       [''],
       ['CONTOH BARIS:'],
       exampleRow,
@@ -373,6 +377,7 @@ router.post('/import', requireMinLevel('admin'), excelUpload.single('file'), asy
     const colOdo = col('Odometer (km)', 'Odometer')
     const colLoc = col('Lokasi')
     const colCap = col('Kapasitas')
+    const colJumlah = col('Jumlah')
 
     const value = (r, idx) => (idx !== null && Array.isArray(r) && r[idx] !== undefined && r[idx] !== null ? String(r[idx]).trim() : '')
 
@@ -444,10 +449,25 @@ router.post('/import', requireMinLevel('admin'), excelUpload.single('file'), asy
         }
       }
 
+      let quantity = 1
+      const qtyStr = value(row, colJumlah)
+      if (qtyStr) {
+        quantity = Number(qtyStr)
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+          errors.push({ row: rowNum, name, error: 'Jumlah harus berupa angka bulat 1-500' })
+          continue
+        }
+      }
+      if (quantity > 1 && category !== 'tool') {
+        errors.push({ row: rowNum, name, error: 'Kolom Jumlah hanya berlaku untuk kategori tool (barang)' })
+        continue
+      }
+
       validRows.push({
         name,
         category,
         status,
+        quantity,
         description: value(row, colDesc) || null,
         model: isVehicle ? value(row, colModel) || null : null,
         plate_number: isVehicle ? value(row, colPlate) || null : null,
@@ -457,23 +477,32 @@ router.post('/import', requireMinLevel('admin'), excelUpload.single('file'), asy
       })
     }
 
-    // Skip nama yang sudah ada (case-insensitive)
-    const uniqueNames = [...new Set(validRows.map((r) => r.name.toLowerCase()))]
+    // Skip nama yang sudah ada (case-insensitive) — per unit
+    const allNames = []
+    validRows.forEach((r) => {
+      const qty = r.quantity || 1
+      for (let i = 1; i <= qty; i++) allNames.push((qty > 1 ? `${r.name} (Unit ${i})` : r.name).toLowerCase())
+    })
     let existingSet = new Set()
-    if (uniqueNames.length > 0) {
+    if (allNames.length > 0) {
       const { rows } = await pool.query(
         'SELECT LOWER(name) AS name FROM assets WHERE deleted_at IS NULL AND LOWER(name) = ANY($1)',
-        [uniqueNames],
+        [allNames],
       )
       existingSet = new Set(rows.map((r) => r.name))
     }
     const skipped = []
-    const toInsert = validRows.filter((r) => {
-      if (existingSet.has(r.name.toLowerCase())) {
-        skipped.push({ row: -1, name: r.name, error: 'Nama aset sudah ada di sistem' })
-        return false
+    const toInsert = []
+    validRows.forEach((r) => {
+      const qty = r.quantity || 1
+      for (let i = 1; i <= qty; i++) {
+        const unitName = qty > 1 ? `${r.name} (Unit ${i})` : r.name
+        if (existingSet.has(unitName.toLowerCase())) {
+          skipped.push({ row: -1, name: unitName, error: 'Nama aset sudah ada di sistem' })
+        } else {
+          toInsert.push({ ...r, name: unitName })
+        }
       }
-      return true
     })
 
     let imported = 0
@@ -537,6 +566,7 @@ router.post(
     body('name').trim().notEmpty().withMessage('Nama aset wajib diisi'),
     body('description').optional().trim(),
     body('status').optional(),
+    body('quantity').optional().isInt({ min: 1, max: 500 }).withMessage('Jumlah unit harus angka 1-500').toInt(),
     // vehicle details
     body('model').optional().trim(),
     body('plate_number').optional().trim(),
@@ -553,43 +583,50 @@ router.post(
       const {
         name, category, description, status = 'available',
         model, plate_number, last_odometer,
-        location, capacity,
+        location, capacity, quantity,
       } = req.body
 
-      const asset_code = generateAssetCode()
+      const qty = quantity || 1
+      if (qty > 1 && category !== 'tool') {
+        return res.status(400).json({ error: 'Jumlah unit hanya berlaku untuk kategori tool (barang)' })
+      }
+
       const photo_url = fileToBase64(req.file)
 
       const client = await pool.connect()
       try {
         await client.query('BEGIN')
-
-        const { rows } = await client.query(
-          `INSERT INTO assets (asset_code, category, name, description, photo_url, status)
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-          [asset_code, category, name, description || null, photo_url, status],
-        )
-        const asset = rows[0]
-
-        if (category === 'vehicle') {
-          await client.query(
-            `INSERT INTO vehicle_details (asset_id, model, plate_number, last_odometer)
-             VALUES ($1, $2, $3, $4)`,
-            [asset.id, model || null, plate_number || null, last_odometer || null],
+        const created = []
+        for (let i = 1; i <= qty; i++) {
+          const unitName = qty > 1 ? `${name} (Unit ${i})` : name
+          const { rows } = await client.query(
+            `INSERT INTO assets (asset_code, category, name, description, photo_url, status)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [generateAssetCode(), category, unitName, description || null, i === 1 ? photo_url : null, status],
           )
-        } else if (category === 'room') {
-          await client.query(
-            `INSERT INTO room_details (asset_id, location, capacity)
-             VALUES ($1, $2, $3)`,
-            [asset.id, location || null, capacity || null],
-          )
+          const asset = rows[0]
+          if (category === 'vehicle') {
+            await client.query(
+              `INSERT INTO vehicle_details (asset_id, model, plate_number, last_odometer)
+               VALUES ($1, $2, $3, $4)`,
+              [asset.id, model || null, plate_number || null, last_odometer || null],
+            )
+          } else if (category === 'room') {
+            await client.query(
+              `INSERT INTO room_details (asset_id, location, capacity)
+               VALUES ($1, $2, $3)`,
+              [asset.id, location || null, capacity || null],
+            )
+          }
+          created.push(asset)
         }
 
         await client.query('SELECT log_audit($1,$2,$3,$4,$5,$6)', [
           req.admin.id, req.admin.name, 'create_asset', 'assets',
-          String(asset.id), JSON.stringify({ name, category, status }),
+          String(created[0].id), JSON.stringify({ name, category, status, quantity: qty }),
         ])
         await client.query('COMMIT')
-        res.status(201).json({ data: asset })
+        res.status(201).json({ data: qty > 1 ? created : created[0], count: qty })
       } catch (err) {
         await client.query('ROLLBACK')
         throw err
