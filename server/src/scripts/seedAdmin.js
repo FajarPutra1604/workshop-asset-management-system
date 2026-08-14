@@ -42,7 +42,7 @@ async function main() {
     const passwordHash = await bcrypt.hash(password, 10)
     const result = await pool.query(
       `INSERT INTO admin_users (name, email, password_hash, role)
-       VALUES ($1, $2, $3, 'admin')
+       VALUES ($1, $2, $3, 'superadmin')
        RETURNING id, name, email, role, created_at`,
       [name, email, passwordHash],
     )
